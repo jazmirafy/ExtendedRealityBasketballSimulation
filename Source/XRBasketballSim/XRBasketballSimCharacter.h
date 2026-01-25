@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #pragma once
 
 #include "CoreMinimal.h"
@@ -15,120 +13,141 @@ class UCameraComponent;
 class UAnimMontage;
 class USoundBase;
 
+// first person character with pickup and inspect interaction
 UCLASS(config=Game)
 class AXRBasketballSimCharacter : public ACharacter
 {
 	GENERATED_BODY()
 
-	/** Pawn mesh: 1st person view (arms; seen only by self) */
+	// first person arms mesh
 	UPROPERTY(VisibleDefaultsOnly, Category=Mesh)
 	USkeletalMeshComponent* Mesh1P;
 
-	/** First person camera */
+	// camera used for interaction
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Camera, meta = (AllowPrivateAccess = "true"))
 	UCameraComponent* FirstPersonCameraComponent;
 
-	/** MappingContext */
+	// default input mapping
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	class UInputMappingContext* DefaultMappingContext;
 
-	/** MappingContext */
+	// gameplay input mapping
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputMappingContext* GameplayMappingContext;
 
-	/** Jump Input Action */
+	// jump input
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	class UInputAction* JumpAction;
 
-	/** Move Input Action */
+	// movement input
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category=Input, meta=(AllowPrivateAccess = "true"))
 	class UInputAction* MoveAction;
 
-	//Pickup/ShootAction
+	// pickup and throw input
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* ActionAction;
 
-	//InspectAction
+	// inspect input
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* InspectAction;
 
+	// anchor for held items
 	UPROPERTY(EditAnywhere)
 	class USceneComponent* HoldingComponent;
-	
-public:
 
+public:
+	// initializes character components
 	AXRBasketballSimCharacter();
 
 protected:
-
+	// sets up input and camera limits
 	virtual void BeginPlay();
+
+	// updates interaction logic
 	virtual void Tick(float DeltaSeconds) override;
 
 public:
-		
-	/** Look Input Action */
+	// look input
 	UPROPERTY(EditAnywhere, BlueprintReadOnly, Category = Input, meta = (AllowPrivateAccess = "true"))
 	class UInputAction* LookAction;
 
-	/** Bool for AnimBP to switch to another animation set */
+	// animation state flag
 	UPROPERTY(VisibleAnywhere, BlueprintReadOnly, Category = Weapon)
 	bool bHasRifle;
 
-	/** Setter to set the bool */
+	// sets animation state
 	UFUNCTION(BlueprintCallable, Category = Weapon)
 	void SetHasRifle(bool bNewHasRifle);
 
-	/** Getter for the bool */
+	// gets animation state
 	UFUNCTION(BlueprintCallable, Category = Weapon)
 	bool GetHasRifle();
 
+	// currently targeted pickup
 	UPROPERTY(EditAnywhere)
 	class APickup* CurrentItem;
 
+	// movement enabled flag
 	bool bCanMove;
+
+	// holding state flag
 	bool bHoldingItem;
+
+	// inspect mode flag
 	bool bInspecting;
 
+	// cached camera pitch limits
 	float PitchMax;
 	float PitchMin;
 
+	// cached interaction data
 	FVector HoldingComp;
 	FRotator LastRotation;
 
+	// line trace data
 	FVector Start;
 	FVector ForwardVector;
 	FVector End;
 
+	// last trace hit
 	FHitResult Hit;
 
+	// trace parameters
 	FComponentQueryParams DefaultComponentQueryParams;
 	FCollisionResponseParams DefaultResponseParams;
 
 protected:
-	/** Called for movement input */
+	// movement input handler
 	void Move(const FInputActionValue& Value);
 
-	/** Called for looking input */
+	// look input handler
 	void Look(const FInputActionValue& Value);
 
+	// enters inspect mode
 	void Inspect();
+
+	// exits inspect mode
 	void StopInspecting();
+
+	// pickup action handler
 	void Action();
 
+	// toggles movement state
 	void ToggleMovement();
+
+	// toggles pickup state
 	void ToggleItemPickup();
 
 protected:
-	// APawn interface
+	// binds input actions
 	virtual void SetupPlayerInputComponent(UInputComponent* InputComponent) override;
-	// End of APawn interface
 
 public:
-	/** Returns Mesh1P subobject **/
+	// returns first person mesh
 	USkeletalMeshComponent* GetMesh1P() const { return Mesh1P; }
-	/** Returns FirstPersonCameraComponent subobject **/
+
+	// returns camera component
 	UCameraComponent* GetFirstPersonCameraComponent() const { return FirstPersonCameraComponent; }
-
-
 };
+
 

@@ -1,66 +1,97 @@
-// Fill out your copyright notice in the Description page of Project Settings.
-
 #include "Camera/CameraComponent.h"
 #include "Pickup.h"
 #include "Kismet/GameplayStatics.h"
 #include "GameFramework/Character.h"
 
-// Sets default values
+// sets default values for the pickup actor
 APickup::APickup()
 {
- 	// Set this actor to call Tick() every frame.  You can turn this off to improve performance if you don't need it.
+	// enable ticking every frame
 	PrimaryActorTick.bCanEverTick = true;
+
+	// create mesh component and enable physics
 	MyMesh = CreateDefaultSubobject<UStaticMeshComponent>(TEXT("MyMesh"));
 	MyMesh->SetSimulatePhysics(true);
+
+	// set mesh as root component
 	RootComponent = MyMesh;
 
+	// initialize pickup state
 	bHolding = false;
 	bGravity = true;
 }
 
-// Called when the game starts or when spawned
+// called when the game starts or when spawned
 void APickup::BeginPlay()
 {
 	Super::BeginPlay();
+
+	// get the player character
 	MyCharacter = UGameplayStatics::GetPlayerCharacter(this, 0);
+
+	// get the player camera component
 	PlayerCamera = MyCharacter->FindComponentByClass<UCameraComponent>();
 
+	// find the holding component attached to the player
 	TArray<USceneComponent*> Components;
 	MyCharacter->GetComponents(Components);
 
-	if (Components.Num() > 0) {
-		for (auto& Comp : Components) {
-			if (Comp->GetName() == "HoldingComponent") {
+	if (Components.Num() > 0)
+	{
+		for (auto& Comp : Components)
+		{
+			// match by name so we know where to attach held objects
+			if (Comp->GetName() == "HoldingComponent")
+			{
 				HoldingComp = Cast<USceneComponent>(Comp);
 			}
 		}
 	}
 }
 
-// Called every frame
+// called every frame
 void APickup::Tick(float DeltaTime)
 {
 	Super::Tick(DeltaTime);
 
-	if (bHolding && HoldingComp) {
-		SetActorLocationAndRotation(HoldingComp->GetComponentLocation(), HoldingComp->GetComponentRotation());
+	// snap pickup to holding component when held
+	if (bHolding && HoldingComp)
+	{
+		SetActorLocationAndRotation(
+			HoldingComp->GetComponentLocation(),
+			HoldingComp->GetComponentRotation()
+		);
 	}
 }
-void APickup::RotateActor() {
 
+// rotates the pickup to match player control rotation
+void APickup::RotateActor()
+{
 	ControlRotation = GetWorld()->GetFirstPlayerController()->GetControlRotation();
 	SetActorRotation(FQuat(ControlRotation));
 }
-void APickup::Pickup() {
 
+// toggles pickup and throw behavior
+void APickup::Pickup()
+{
+	// toggle holding and gravity states
 	bHolding = !bHolding;
 	bGravity = !bGravity;
+
+	// update physics and collision based on holding state
 	MyMesh->SetEnableGravity(bGravity);
 	MyMesh->SetSimulatePhysics(bHolding ? false : true);
-	MyMesh->SetCollisionEnabled(bHolding ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics);
+	MyMesh->SetCollisionEnabled(
+		bHolding ? ECollisionEnabled::NoCollision : ECollisionEnabled::QueryAndPhysics
+	);
 
-	if (!bHolding) {
+	// apply impulse forward when released
+	if (!bHolding)
+	{
 		ForwardVector = PlayerCamera->GetForwardVector();
-		MyMesh->AddImpulse(ForwardVector * ForceAmount * MyMesh->GetMass());
+		MyMesh->AddImpulse(
+			ForwardVector * ForceAmount * MyMesh->GetMass()
+		);
 	}
 }
+

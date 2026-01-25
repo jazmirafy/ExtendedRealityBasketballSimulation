@@ -1,5 +1,3 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
-
 #include "XRBasketballSimCharacter.h"
 #include "XRBasketballSimProjectile.h"
 #include "Animation/AnimInstance.h"
@@ -10,214 +8,238 @@
 #include "DrawDebugHelpers.h"
 #include "EnhancedInputSubsystems.h"
 
-
-//////////////////////////////////////////////////////////////////////////
-// AXRBasketballSimCharacter
+// xrbasketballsimcharacter
 
 AXRBasketballSimCharacter::AXRBasketballSimCharacter()
 {
-	// Character doesnt have a rifle at start
+	// character does not start with a rifle
 	bHasRifle = false;
-	
-	// Set size for collision capsule
+
+	// set collision capsule size
 	GetCapsuleComponent()->InitCapsuleSize(55.f, 96.0f);
-		
-	// Create a CameraComponent	
+
+	// create first-person camera
 	FirstPersonCameraComponent = CreateDefaultSubobject<UCameraComponent>(TEXT("FirstPersonCamera"));
 	FirstPersonCameraComponent->SetupAttachment(GetCapsuleComponent());
-	FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f)); // Position the camera
+	FirstPersonCameraComponent->SetRelativeLocation(FVector(-10.f, 0.f, 60.f));
 	FirstPersonCameraComponent->bUsePawnControlRotation = true;
 
-	// Create a mesh component that will be used when being viewed from a '1st person' view (when controlling this pawn)
+	// create first-person mesh (only visible to owner)
 	Mesh1P = CreateDefaultSubobject<USkeletalMeshComponent>(TEXT("CharacterMesh1P"));
 	Mesh1P->SetOnlyOwnerSee(true);
 	Mesh1P->SetupAttachment(FirstPersonCameraComponent);
 	Mesh1P->bCastDynamicShadow = false;
 	Mesh1P->CastShadow = false;
-	//Mesh1P->SetRelativeRotation(FRotator(0.9f, -19.19f, 5.2f));
 	Mesh1P->SetRelativeLocation(FVector(-30.f, 0.f, -150.f));
 
-
+	// create holding component for picked up items
 	HoldingComponent = CreateDefaultSubobject<USceneComponent>(TEXT("HoldingComponent"));
 	HoldingComponent->SetRelativeLocation(FVector(50.0f, 0.0f, 0.0f));
 	HoldingComponent->SetupAttachment(FirstPersonCameraComponent);
 
+	// initialize interaction states
 	CurrentItem = NULL;
 	bCanMove = true;
 	bInspecting = false;
-
 }
 
+// called when the game starts
 void AXRBasketballSimCharacter::BeginPlay()
 {
-	// Call the base class  
 	Super::BeginPlay();
 
-	//Add Input Mapping Context
+	// add enhanced input mapping contexts
 	if (APlayerController* PlayerController = Cast<APlayerController>(Controller))
 	{
-		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(PlayerController->GetLocalPlayer()))
+		if (UEnhancedInputLocalPlayerSubsystem* Subsystem =
+			ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(
+				PlayerController->GetLocalPlayer()))
 		{
 			Subsystem->AddMappingContext(DefaultMappingContext, 0);
 			Subsystem->AddMappingContext(GameplayMappingContext, 1);
 		}
 	}
 
+	// cache camera pitch limits
 	PitchMax = GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMax;
 	PitchMin = GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMin;
-
 }
-void AXRBasketballSimCharacter::Tick(float DeltaTime) {
+
+// called every frame
+void AXRBasketballSimCharacter::Tick(float DeltaTime)
+{
 	Super::Tick(DeltaTime);
 
+	// set up line trace from camera
 	Start = FirstPersonCameraComponent->GetComponentLocation();
 	ForwardVector = FirstPersonCameraComponent->GetForwardVector();
-	End = ((ForwardVector * 300.0f) + Start);
+	End = (ForwardVector * 300.0f) + Start;
 
+	// draw debug line for interaction trace
 	DrawDebugLine(GetWorld(), Start, End, FColor::Cyan, false, 1, 0, 1);
 
-	
-	if (!bHoldingItem) {
-		if (GetWorld()->LineTraceSingleByChannel(Hit, Start, End, ECC_Visibility, DefaultComponentQueryParams, DefaultResponseParams)) {
-			if (Hit.GetActor()->GetClass()->IsChildOf(APickup::StaticClass())) {
-
+	// detect pickup objects when not holding anything
+	if (!bHoldingItem)
+	{
+		if (GetWorld()->LineTraceSingleByChannel(
+			Hit, Start, End, ECC_Visibility,
+			DefaultComponentQueryParams, DefaultResponseParams))
+		{
+			if (Hit.GetActor()->GetClass()->IsChildOf(APickup::StaticClass()))
+			{
 				CurrentItem = Cast<APickup>(Hit.GetActor());
-
 			}
 		}
-		else {
+		else
+		{
 			CurrentItem = NULL;
 		}
-
 	}
-	
-	//controls camera zoom between inspecting and holding items
-	if (bInspecting) {
-		if (bHoldingItem) {
+
+	// camera behavior while inspecting or holding items
+	if (bInspecting)
+	{
+		if (bHoldingItem)
+		{
+			// lock movement and zoom in for inspection
 			bCanMove = false;
-			FirstPersonCameraComponent->SetFieldOfView(FMath::Lerp(FirstPersonCameraComponent->FieldOfView, 70.0f, 0.1f));
+			FirstPersonCameraComponent->SetFieldOfView(
+				FMath::Lerp(FirstPersonCameraComponent->FieldOfView, 70.0f, 0.1f));
 			HoldingComponent->SetRelativeLocation(FVector(0.0f, 50.0f, 50.0f));
-			GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMax = 179.90000002f;
-			GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMin = -179.90000002f;
-			//CurrentItem->RotateActor();
+
+			// allow full pitch rotation
+			GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMax = 179.9f;
+			GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMin = -179.9f;
 		}
-		else {
-
-			FirstPersonCameraComponent->SetFieldOfView(FMath::Lerp(FirstPersonCameraComponent->FieldOfView, 45.0f, 0.1f));
-
+		else
+		{
+			// zoom slightly when inspecting without holding
+			FirstPersonCameraComponent->SetFieldOfView(
+				FMath::Lerp(FirstPersonCameraComponent->FieldOfView, 45.0f, 0.1f));
 		}
 	}
-	else {
+	else
+	{
+		// default gameplay fov
+		FirstPersonCameraComponent->SetFieldOfView(
+			FMath::Lerp(FirstPersonCameraComponent->FieldOfView, 90.0f, 0.1f));
 
-		FirstPersonCameraComponent->SetFieldOfView(FMath::Lerp(FirstPersonCameraComponent->FieldOfView, 90.0f, 0.1f));
-		if (bHoldingItem) {
+		// reset holding position when not inspecting
+		if (bHoldingItem)
+		{
 			HoldingComponent->SetRelativeLocation(FVector(50.0f, 0.0f, 0.0f));
 		}
 	}
 }
-//////////////////////////////////////////////////////////////////////////// Input
 
-void AXRBasketballSimCharacter::SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent)
+// input
+
+void AXRBasketballSimCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
-	// Set up action bindings
-	if (UEnhancedInputComponent* EnhancedInputComponent = CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
+	if (UEnhancedInputComponent* EnhancedInputComponent =
+		CastChecked<UEnhancedInputComponent>(PlayerInputComponent))
 	{
-		//Jumping
+		// jump input
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Triggered, this, &ACharacter::Jump);
 		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
 
-		//Moving
+		// movement input
 		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AXRBasketballSimCharacter::Move);
 
-		//Looking
+		// camera look input
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AXRBasketballSimCharacter::Look);
 
-		//Pickup/Shoot
+		// pickup / throw input
 		EnhancedInputComponent->BindAction(ActionAction, ETriggerEvent::Triggered, this, &AXRBasketballSimCharacter::Action);
 
-		//Inspect
+		// inspect input
 		EnhancedInputComponent->BindAction(InspectAction, ETriggerEvent::Triggered, this, &AXRBasketballSimCharacter::Inspect);
 		EnhancedInputComponent->BindAction(InspectAction, ETriggerEvent::Completed, this, &AXRBasketballSimCharacter::StopInspecting);
-
 	}
 }
 
-
+// movement logic
 void AXRBasketballSimCharacter::Move(const FInputActionValue& Value)
 {
-	// input is a Vector2D
 	FVector2D MovementVector = Value.Get<FVector2D>();
 
-	if (Controller != nullptr && bCanMove && !bInspecting)
+	if (Controller && bCanMove && !bInspecting)
 	{
-		// add movement 
 		AddMovementInput(GetActorForwardVector(), MovementVector.Y);
 		AddMovementInput(GetActorRightVector(), MovementVector.X);
 	}
 }
 
+// camera look logic
 void AXRBasketballSimCharacter::Look(const FInputActionValue& Value)
 {
-	// input is a Vector2D
 	FVector2D LookAxisVector = Value.Get<FVector2D>();
 
-	if (Controller != nullptr && bCanMove &&!bInspecting)
+	if (Controller && bCanMove && !bInspecting)
 	{
-		// add yaw and pitch input to controller
 		AddControllerYawInput(LookAxisVector.X);
 		AddControllerPitchInput(LookAxisVector.Y);
 	}
 }
 
-void AXRBasketballSimCharacter::SetHasRifle(bool bNewHasRifle)
+// action button handler
+void AXRBasketballSimCharacter::Action()
 {
-	bHasRifle = bNewHasRifle;
-}
-
-bool AXRBasketballSimCharacter::GetHasRifle()
-{
-	return bHasRifle;
-}
-void AXRBasketballSimCharacter::Action() {
-	if (CurrentItem && !bInspecting) {
+	if (CurrentItem && !bInspecting)
+	{
 		ToggleItemPickup();
 	}
 }
-void AXRBasketballSimCharacter::Inspect() {
-	if (bHoldingItem) {
+
+// begin inspect mode
+void AXRBasketballSimCharacter::Inspect()
+{
+	if (bHoldingItem)
+	{
 		LastRotation = GetControlRotation();
 		ToggleMovement();
 	}
-	else {
+	else
+	{
 		bInspecting = true;
 	}
 }
 
-void AXRBasketballSimCharacter::StopInspecting() {
-	if (bInspecting && bHoldingItem) {
+// end inspect mode
+void AXRBasketballSimCharacter::StopInspecting()
+{
+	if (bInspecting && bHoldingItem)
+	{
 		GetController()->SetControlRotation(LastRotation);
 		GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMax = PitchMax;
 		GetWorld()->GetFirstPlayerController()->PlayerCameraManager->ViewPitchMin = PitchMin;
 		ToggleMovement();
-	} 
-	else {
+	}
+	else
+	{
 		bInspecting = false;
 	}
 }
-void AXRBasketballSimCharacter::ToggleMovement() {
-	
+
+// toggles movement and camera control
+void AXRBasketballSimCharacter::ToggleMovement()
+{
 	bInspecting = !bInspecting;
 	bCanMove = !bInspecting;
 	FirstPersonCameraComponent->bUsePawnControlRotation = !FirstPersonCameraComponent->bUsePawnControlRotation;
 	bUseControllerRotationYaw = !bUseControllerRotationYaw;
-
 }
-void AXRBasketballSimCharacter::ToggleItemPickup() {
-	if (CurrentItem) {
+
+// handles pickup state changes
+void AXRBasketballSimCharacter::ToggleItemPickup()
+{
+	if (CurrentItem)
+	{
 		bHoldingItem = !bHoldingItem;
 		CurrentItem->Pickup();
 
-		if (!bHoldingItem) {
+		if (!bHoldingItem)
+		{
 			CurrentItem = NULL;
 		}
 	}
