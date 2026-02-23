@@ -130,6 +130,17 @@ void AXRBasketballSimCharacter::Tick(float DeltaTime)
 			HoldingComponent->SetRelativeLocation(FVector(50.0f, 0.0f, 0.0f));
 		}
 	}
+
+	// Force camera to respect controller rotation in VR preview (CAVE fix)
+	if (Controller && !bInspecting && FirstPersonCameraComponent->bUsePawnControlRotation)
+	{
+		FRotator ControlRot = Controller->GetControlRotation();
+		FRotator CurrentRot = FirstPersonCameraComponent->GetComponentRotation();
+
+		// Only override if XR system has deviated our pitch
+		FRotator ForcedRot = FRotator(ControlRot.Pitch, ControlRot.Yaw, CurrentRot.Roll);
+		FirstPersonCameraComponent->SetWorldRotation(ForcedRot);
+	}
 }
 
 // input
@@ -243,4 +254,14 @@ void AXRBasketballSimCharacter::ToggleItemPickup()
 			CurrentItem = NULL;
 		}
 	}
+}
+
+void AXRBasketballSimCharacter::SetHasRifle(bool bNewHasRifle)
+{
+	bHasRifle = bNewHasRifle;
+}
+
+bool AXRBasketballSimCharacter::GetHasRifle()
+{
+	return bHasRifle;
 }
